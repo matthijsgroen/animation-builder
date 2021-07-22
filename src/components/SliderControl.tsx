@@ -15,7 +15,7 @@ const Value = styled.p`
 
 interface SliderControlProps {
   title?: string;
-  showValue?: boolean;
+  showValue?: boolean | ((value: number) => string);
   value: number;
   min: number;
   max: number;
@@ -43,7 +43,8 @@ const SliderControl: React.VFC<SliderControlProps> = ({
       </ControlLabel>
     )}
     <div>
-      {showValue && <Value>{Math.round(value * 10e3) / 10e3}</Value>}
+      {showValue === true && <Value>{Math.round(value * 10e3) / 10e3}</Value>}
+      {showValue && showValue !== true && <Value>{showValue(value)}</Value>}
       <Slider
         min={min}
         max={max}

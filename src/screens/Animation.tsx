@@ -1,6 +1,7 @@
 import React, { Dispatch, SetStateAction, useCallback, useState } from "react";
 import AnimationCanvas from "src/animation/AnimationCanvas";
 import { ControlStyle } from "src/components/Control";
+import LayerMouseControl from "src/components/LayerMouseControl";
 import Menu from "src/components/Menu";
 import NumberInputControl from "src/components/NumberInputControl";
 import SliderControl from "src/components/SliderControl";
@@ -8,8 +9,7 @@ import TextInputControl from "src/components/TextInputControl";
 import { TimeContainer } from "src/components/TimeContainer";
 import ToolbarButton from "src/components/ToolbarButton";
 import { omitKeys } from "src/lib/definitionHelpers";
-import { maxZoomFactor } from "src/lib/webgl";
-import MouseControl, { MouseMode } from "../components/MouseControl";
+import { MouseMode } from "../components/MouseControl";
 import {
   AnimationFrame,
   ControlValues,
@@ -38,17 +38,9 @@ const Animation: React.VFC<AnimationProps> = ({
   panXState,
   panYState,
 }) => {
-  const [zoom, setZoom] = zoomState;
-  const [panX, setPanX] = panXState;
-  const [panY, setPanY] = panYState;
-
-  const [isMouseDown, setIsMouseDown] = useState<false | [number, number]>(
-    false
-  );
-  const [mouseMoveDelta, setMouseMoveDelta] = useState<[number, number]>([
-    0,
-    0,
-  ]);
+  const [zoom] = zoomState;
+  const [panX] = panXState;
+  const [panY] = panYState;
 
   const controlValues = imageDefinition.controlValues;
   const setControlValues = (
@@ -115,62 +107,6 @@ const Animation: React.VFC<AnimationProps> = ({
   ) => updateFrame((f) => ({ ...f, controlValues: mutation(f.controlValues) }));
 
   const mouseMode = MouseMode.Grab;
-  const mouseDown = (event: React.MouseEvent) => {
-    const canvasPos = event.currentTarget.getBoundingClientRect();
-    const elementX = event.pageX - canvasPos.left;
-    const elementY = event.pageY - canvasPos.top;
-    setIsMouseDown([elementX, elementY]);
-    setMouseMoveDelta([0, 0]);
-  };
-
-  const mouseMove = (event: React.MouseEvent) => {
-    if (isMouseDown) {
-      const canvasPos = event.currentTarget.getBoundingClientRect();
-      const elementX = event.pageX - canvasPos.left;
-      const elementY = event.pageY - canvasPos.top;
-
-      const deltaX = elementX - isMouseDown[0];
-      const deltaY = elementY - isMouseDown[1];
-      setMouseMoveDelta([deltaX, deltaY]);
-
-      const newPanX = Math.min(
-        1.0,
-        Math.max(
-          panX +
-            (((deltaX - mouseMoveDelta[0]) / canvasPos.width) *
-              window.devicePixelRatio) /
-              zoom,
-          -1.0
-        )
-      );
-      setPanX(newPanX);
-
-      const newPanY = Math.min(
-        1.0,
-        Math.max(
-          panY +
-            (((deltaY - mouseMoveDelta[1]) / canvasPos.height) *
-              window.devicePixelRatio *
-              -1.0) /
-              zoom,
-          -1.0
-        )
-      );
-      setPanY(newPanY);
-    }
-  };
-
-  const mouseUp = () => {
-    setIsMouseDown(false);
-  };
-
-  const mouseWheel = (delta: number) => {
-    const z = Math.min(
-      maxZoomFactor(texture),
-      Math.max(0.1, zoom - delta / 100)
-    );
-    setZoom(z);
-  };
 
   const onTrackStopped = useCallback((trackName: string) => {
     setPlayStatus((status) => omitKeys(status, [trackName]));
@@ -179,12 +115,12 @@ const Animation: React.VFC<AnimationProps> = ({
   return (
     <ScreenLayout
       main={
-        <MouseControl
+        <LayerMouseControl
           mode={mouseMode}
-          onMouseDown={mouseDown}
-          onMouseMove={mouseMove}
-          onMouseUp={mouseUp}
-          onWheel={mouseWheel}
+          texture={texture}
+          zoomState={zoomState}
+          panXState={panXState}
+          panYState={panYState}
         >
           <AnimationCanvas
             image={texture}
@@ -197,7 +133,7 @@ const Animation: React.VFC<AnimationProps> = ({
             showFPS={showFPS}
             onTrackStopped={onTrackStopped}
           />
-        </MouseControl>
+        </LayerMouseControl>
       }
       menus={[
         <Menu

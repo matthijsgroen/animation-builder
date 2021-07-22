@@ -3,6 +3,8 @@ import {
   MutationVector,
   ImageDefinition,
   ControlDefinition,
+  ShapeMutationVector,
+  ColorMutationVector,
 } from "./types";
 
 export type Visitor = (
@@ -23,11 +25,21 @@ export const isControlDefinition = (
 ): item is ControlDefinition => item.type === "slider";
 
 export const isMutationVector = (item: ItemWithType): item is MutationVector =>
+  isShapeMutationVector(item) || isColorMutationVector(item);
+
+export const isShapeMutationVector = (
+  item: ItemWithType
+): item is ShapeMutationVector =>
   item.type === "deform" ||
   item.type === "rotate" ||
   item.type === "translate" ||
   item.type === "stretch" ||
   item.type === "opacity";
+
+export const isColorMutationVector = (
+  item: ItemWithType
+): item is ColorMutationVector =>
+  item.type === "colorize" || item.type === "lightness";
 
 export const visitVectors = (
   vectors: MutationVector[],

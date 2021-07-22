@@ -1,15 +1,19 @@
 import { vectorNamesFromShape } from "src/lib/definitionHelpers";
 import { flatten } from "src/lib/vertices";
-import { isShapeDefinition, visitShapes } from "src/lib/visit";
+import {
+  isShapeDefinition,
+  isShapeMutationVector,
+  visitShapes,
+} from "src/lib/visit";
 import {
   ItemSelection,
   Keyframe,
-  MutationVector,
+  MutationVectorTypes,
   ShapeDefinition,
 } from "../../lib/types";
 import { createProgram, WebGLRenderer } from "../../lib/webgl";
 import {
-  createMutationList,
+  createShapeMutationList,
   MAX_MUTATION_VECTORS,
   mutationShader,
   mutationValueShader,
@@ -110,14 +114,14 @@ const purple = [187, 0, 255].map((v) => v / 256.0) as Color;
 const green = [0, 180, 0].map((v) => v / 256.0) as Color;
 const white = [240, 240, 240].map((v) => v / 256.0) as Color;
 
-type VectorTypes = MutationVector["type"];
-
-const colorMapping: Record<VectorTypes, Color> = {
+const colorMapping: Record<MutationVectorTypes, Color> = {
   deform: orange,
   rotate: red,
   stretch: purple,
   translate: green,
   opacity: white,
+  lightness: white,
+  colorize: orange,
 };
 
 export const showCompositionVectors = (): {
@@ -168,38 +172,9 @@ export const showCompositionVectors = (): {
         return undefined;
       }
 
-      shape.mutationVectors.forEach((vector, i) => {
-        const start = indices.length;
-        vectors.push({
-          name: vector.name,
-          mutator: 0,
-          boundToLayer: shape.name,
-          x: vector.origin[0],
-          y: vector.origin[1],
-          z: 0.00001 * i,
-          start,
-          amount: 6,
-        });
-        const offset = vertices.length / stride;
-        const color = colorMapping[vector.type];
-        vertices.push(0, -3, ...color, 1);
-        vertices.push(1, -3, ...color, 1);
-        vertices.push(2, -3, ...color, 1);
-        vertices.push(3, -3, ...color, 1);
-
-        indices.push(
-          offset,
-          offset + 1,
-          offset + 2,
-          offset + 1,
-          offset + 2,
-          offset + 3
-        );
-
-        if (
-          vector.type === "deform" ||
-          (vector.type === "translate" && vector.radius !== -1)
-        ) {
+      shape.mutationVectors
+        .filter(isShapeMutationVector)
+        .forEach((vector, i) => {
           const start = indices.length;
           vectors.push({
             name: vector.name,
@@ -207,16 +182,16 @@ export const showCompositionVectors = (): {
             boundToLayer: shape.name,
             x: vector.origin[0],
             y: vector.origin[1],
-            z: 0.2 + 0.00001 * i,
+            z: 0.00001 * i,
             start,
             amount: 6,
           });
           const offset = vertices.length / stride;
           const color = colorMapping[vector.type];
-          vertices.push(0, vector.radius, ...color, 0.2);
-          vertices.push(1, vector.radius, ...color, 0.2);
-          vertices.push(2, vector.radius, ...color, 0.2);
-          vertices.push(3, vector.radius, ...color, 0.2);
+          vertices.push(0, -3, ...color, 1);
+          vertices.push(1, -3, ...color, 1);
+          vertices.push(2, -3, ...color, 1);
+          vertices.push(3, -3, ...color, 1);
 
           indices.push(
             offset,
@@ -226,14 +201,47 @@ export const showCompositionVectors = (): {
             offset + 2,
             offset + 3
           );
-        }
-      });
+
+          if (
+            vector.type === "deform" ||
+            (vector.type === "translate" && vector.radius !== -1)
+          ) {
+            const start = indices.length;
+            vectors.push({
+              name: vector.name,
+              mutator: 0,
+              boundToLayer: shape.name,
+              x: vector.origin[0],
+              y: vector.origin[1],
+              z: 0.2 + 0.00001 * i,
+              start,
+              amount: 6,
+            });
+            const offset = vertices.length / stride;
+            const color = colorMapping[vector.type];
+            vertices.push(0, vector.radius, ...color, 0.2);
+            vertices.push(1, vector.radius, ...color, 0.2);
+            vertices.push(2, vector.radius, ...color, 0.2);
+            vertices.push(3, vector.radius, ...color, 0.2);
+
+            indices.push(
+              offset,
+              offset + 1,
+              offset + 2,
+              offset + 1,
+              offset + 2,
+              offset + 3
+            );
+          }
+        });
       return undefined;
     });
 
-    const { parentList, vectorSettings, mutatorMapping } = createMutationList(
-      shapes
-    );
+    const {
+      parentList,
+      vectorSettings,
+      mutatorMapping,
+    } = createShapeMutationList(shapes);
 
     vectors.forEach((vector) => {
       vector.mutator = mutatorMapping[vector.name];

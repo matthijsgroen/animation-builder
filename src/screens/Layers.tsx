@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import LayerMouseControl from "src/components/LayerMouseControl";
 import {
   defaultStepFn,
   StepSize,
@@ -16,7 +17,7 @@ import TextureMapCanvas, {
   GRID_SIZES,
 } from "../animation/TextureMapCanvas";
 import Menu from "../components/Menu";
-import MouseControl, { MouseMode } from "../components/MouseControl";
+import { MouseMode } from "../components/MouseControl";
 import ShapeList from "../components/ShapeList";
 import ToolbarButton from "../components/ToolbarButton";
 import ToolbarSeperator from "../components/ToolbarSeperator";
@@ -71,17 +72,17 @@ const Layers: React.VFC<LayersProps> = ({
   updateImageDefinition,
   showFPS,
 }) => {
-  const [zoom, setZoom] = useState(1.0);
-  const [panX, setPanX] = useState(0.0);
-  const [panY, setPanY] = useState(0.0);
+  const zoomState = useState(1.0);
+  const panXState = useState(0.0);
+  const panYState = useState(0.0);
+  const [zoom] = zoomState;
+  const [panX] = panXState;
+  const [panY] = panYState;
   const [gridSettings, setGridSettings] = useState<GridSettings>({
     enabled: false,
     magnetic: false,
     size: 2,
   });
-  const [isMouseDown, setIsMouseDown] = useState<false | [number, number]>(
-    false
-  );
   const [activeCoord, setActiveCoord] = useState<null | [number, number]>(null);
   const [layerSelected, setLayerSelected] = useState<null | ItemSelection>(
     null
@@ -117,97 +118,64 @@ const Layers: React.VFC<LayersProps> = ({
     }
   }, [imageDefinition]);
 
-  const mouseDown = (event: React.MouseEvent) => {
-    const canvasPos = event.currentTarget.getBoundingClientRect();
-    const elementX = event.pageX - canvasPos.left;
-    const elementY = event.pageY - canvasPos.top;
-    setIsMouseDown([elementX, elementY]);
-  };
+  const mouseClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (
+        (mouseMode === MouseMode.Aim || mouseMode === MouseMode.Normal) &&
+        texture &&
+        layerSelected
+      ) {
+        const canvasPos = event.currentTarget.getBoundingClientRect();
+        const elementX = event.pageX - canvasPos.left;
+        const elementY = event.pageY - canvasPos.top;
+        const coord = getTextureCoordinate(
+          [canvasPos.width, canvasPos.height],
+          [texture.width, texture.height],
+          [panX, panY],
+          zoom,
+          [elementX, elementY]
+        );
 
-  const mouseMove = (event: React.MouseEvent) => {
-    if (isMouseDown) {
-      const canvasPos = event.currentTarget.getBoundingClientRect();
-      const elementX = event.pageX - canvasPos.left;
-      const elementY = event.pageY - canvasPos.top;
-      setIsMouseDown([elementX, elementY]);
-      const deltaX = elementX - isMouseDown[0];
-      const deltaY = elementY - isMouseDown[1];
+        const shape = getShape(imageDefinition, layerSelected.name);
+        if (shape && shape.type === "sprite") {
+          const closePoint = shape.points.find((p) => {
+            const dx = p[0] - coord[0];
+            const dy = p[1] - coord[1];
+            const zf = maxZoomFactor(texture);
 
-      const newPanX = Math.min(
-        1.0,
-        Math.max(
-          panX + ((deltaX / canvasPos.width) * window.devicePixelRatio) / zoom,
-          -1.0
-        )
-      );
-      setPanX(newPanX);
+            return (
+              dx > -zf / zoom &&
+              dx < zf / zoom &&
+              dy > -zf / zoom &&
+              dy < zf / zoom
+            );
+          });
 
-      const newPanY = Math.min(
-        1.0,
-        Math.max(
-          panY +
-            ((deltaY / canvasPos.height) * window.devicePixelRatio * -1.0) /
-              zoom,
-          -1.0
-        )
-      );
-      setPanY(newPanY);
-    }
-  };
-
-  const mouseUp = (event: React.MouseEvent) => {
-    if (
-      (mouseMode === MouseMode.Aim || mouseMode === MouseMode.Normal) &&
-      texture &&
-      layerSelected
-    ) {
-      const canvasPos = event.currentTarget.getBoundingClientRect();
-      const elementX = event.pageX - canvasPos.left;
-      const elementY = event.pageY - canvasPos.top;
-      const coord = getTextureCoordinate(
-        [canvasPos.width, canvasPos.height],
-        [texture.width, texture.height],
-        [panX, panY],
-        zoom,
-        [elementX, elementY]
-      );
-
-      const shape = getShape(imageDefinition, layerSelected.name);
-      if (shape && shape.type === "sprite") {
-        const closePoint = shape.points.find((p) => {
-          const dx = p[0] - coord[0];
-          const dy = p[1] - coord[1];
-          const zf = maxZoomFactor(texture);
-
-          return (
-            dx > -zf / zoom &&
-            dx < zf / zoom &&
-            dy > -zf / zoom &&
-            dy < zf / zoom
-          );
-        });
-
-        if (!closePoint && mouseMode === MouseMode.Aim) {
-          const gridCoord = alignOnGrid(gridSettings, coord);
-          updateImageDefinition((state) =>
-            addPoint(state, layerSelected.name, gridCoord)
-          );
-          setActiveCoord(gridCoord);
-        } else {
-          closePoint && setActiveCoord(closePoint);
+          if (!closePoint && mouseMode === MouseMode.Aim) {
+            const gridCoord = alignOnGrid(gridSettings, coord);
+            updateImageDefinition((state) =>
+              addPoint(state, layerSelected.name, gridCoord)
+            );
+            setActiveCoord(gridCoord);
+          } else {
+            closePoint && setActiveCoord(closePoint);
+          }
         }
       }
-    }
-    setIsMouseDown(false);
-  };
-
-  const mouseWheel = (delta: number) => {
-    const z = Math.min(
-      maxZoomFactor(texture),
-      Math.max(0.1, zoom - delta / 100)
-    );
-    setZoom(z);
-  };
+    },
+    [
+      layerSelected,
+      mouseMode,
+      panX,
+      panY,
+      setActiveCoord,
+      texture,
+      updateImageDefinition,
+      zoom,
+      imageDefinition,
+      gridSettings,
+    ]
+  );
 
   return (
     <ScreenLayout
@@ -494,12 +462,13 @@ const Layers: React.VFC<LayersProps> = ({
         />,
       ]}
       main={
-        <MouseControl
+        <LayerMouseControl
           mode={mouseMode}
-          onMouseDown={mouseDown}
-          onMouseMove={mouseMove}
-          onMouseUp={mouseUp}
-          onWheel={mouseWheel}
+          texture={texture}
+          panXState={panXState}
+          panYState={panYState}
+          zoomState={zoomState}
+          onClick={mouseClick}
         >
           <TextureMapCanvas
             image={texture}
@@ -512,7 +481,7 @@ const Layers: React.VFC<LayersProps> = ({
             activeCoord={activeCoord}
             showFPS={showFPS}
           />
-        </MouseControl>
+        </LayerMouseControl>
       }
     />
   );

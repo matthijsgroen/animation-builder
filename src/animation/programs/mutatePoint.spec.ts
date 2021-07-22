@@ -5,7 +5,7 @@ import {
   SpriteDefinition,
   TranslationVector,
 } from "src/lib/types";
-import { createMutationList } from "./mutatePoint";
+import { createShapeMutationList } from "./mutatePoint";
 
 const dummyTranslateMutation = (name = "Mutator1"): TranslationVector => ({
   name,
@@ -49,7 +49,7 @@ describe("createMutationList", () => {
       shapeMutatorMapping,
       parentList,
       vectorSettings,
-    } = createMutationList(shapes);
+    } = createShapeMutationList(shapes);
 
     expect(shapeMutatorMapping).toEqual({ Layer1: 0 });
     expect(parentList).toEqual(new Float32Array([-1]));
@@ -69,7 +69,7 @@ describe("createMutationList", () => {
       shapeMutatorMapping,
       parentList,
       vectorSettings,
-    } = createMutationList(shapes);
+    } = createShapeMutationList(shapes);
 
     expect(shapeMutatorMapping).toEqual({ Folder1: 0, Layer1: 0 });
     expect(parentList).toEqual(new Float32Array([-1]));
@@ -97,7 +97,7 @@ describe("createMutationList", () => {
       shapeMutatorMapping,
       parentList,
       vectorSettings,
-    } = createMutationList(shapes);
+    } = createShapeMutationList(shapes);
 
     expect(shapeMutatorMapping).toEqual({ Folder1: 0, Layer1: 1 });
     expect(parentList).toEqual(new Float32Array([-1, 0]));
@@ -136,7 +136,7 @@ describe("createMutationList", () => {
       shapeMutatorMapping,
       parentList,
       vectorSettings,
-    } = createMutationList(shapes);
+    } = createShapeMutationList(shapes);
 
     expect(shapeMutatorMapping).toEqual({ Folder1: 0, Layer1: 2, Layer2: 3 });
     expect(parentList).toEqual(new Float32Array([-1, 0, 1, 0]));

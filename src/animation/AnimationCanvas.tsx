@@ -7,6 +7,7 @@ import {
   createPlayer,
   GeppettoPlayer,
   prepareAnimation,
+  ImageDefinition as PlayerImageDefinition,
 } from "geppetto-player";
 
 export interface AnimationCanvasProps {
@@ -57,7 +58,7 @@ const playerIntegration = () => {
         animation.destroy();
       }
       animation = player.addAnimation(
-        prepareAnimation(imageDefinition),
+        prepareAnimation(imageDefinition as PlayerImageDefinition), // Temporary, until compatible again
         image,
         1,
         {

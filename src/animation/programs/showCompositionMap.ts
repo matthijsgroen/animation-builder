@@ -2,7 +2,7 @@ import { ItemSelection, Keyframe, ShapeDefinition } from "../../lib/types";
 import { flatten, verticesFromPoints } from "../../lib/vertices";
 import { createProgram, WebGLRenderer } from "../../lib/webgl";
 import {
-  createMutationList,
+  createShapeMutationList,
   MAX_MUTATION_VECTORS,
   mutationShader,
   mutationValueShader,
@@ -112,7 +112,7 @@ export const showCompositionMap = (): {
       vectorSettings,
       mutatorMapping,
       shapeMutatorMapping,
-    } = createMutationList(shapes);
+    } = createShapeMutationList(shapes);
 
     elements.forEach((element) => {
       element.mutator = shapeMutatorMapping[element.name];

@@ -1,7 +1,12 @@
-import { MutationVector, ShapeDefinition, Vec4 } from "src/lib/types";
 import {
-  isMutationVector,
+  MutationVector,
+  MutationVectorTypes,
+  ShapeDefinition,
+  Vec4,
+} from "src/lib/types";
+import {
   isShapeDefinition,
+  isShapeMutationVector,
   visitShapes,
 } from "src/lib/visit";
 
@@ -9,12 +14,14 @@ export const MAX_MUTATION_VECTORS = 60;
 export const MAX_CONTROLS = 20;
 export const MAX_MUTATION_CONTROL_VECTORS = 120;
 
-export const vectorTypeMapping = {
+export const vectorTypeMapping: Record<MutationVectorTypes, number> = {
   translate: 1,
   stretch: 2,
   rotate: 3,
   deform: 4,
   opacity: 5,
+  lightness: 6,
+  colorize: 7,
 };
 
 export const mutationControlShader = `
@@ -169,7 +176,7 @@ const getParentMutation = (
   return null;
 };
 
-export const createMutationList = (
+export const createShapeMutationList = (
   shapes: ShapeDefinition[]
 ): {
   parentList: Float32Array;
@@ -183,7 +190,7 @@ export const createMutationList = (
   const mutatorMapping: Record<string, number> = {};
 
   visitShapes(shapes, (item, parents) => {
-    if (isMutationVector(item)) {
+    if (isShapeMutationVector(item)) {
       const value = mutatorToVec4(item);
       const index = mutators.length;
       mutators.push(value);

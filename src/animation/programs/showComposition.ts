@@ -2,7 +2,7 @@ import { fileredTriangles, flatten } from "src/lib/vertices";
 import { Keyframe, ShapeDefinition } from "../../lib/types";
 import { createProgram, WebGLRenderer } from "../../lib/webgl";
 import {
-  createMutationList,
+  createShapeMutationList,
   MAX_MUTATION_VECTORS,
   mutationShader,
   mutationValueShader,
@@ -49,12 +49,113 @@ const compositionFragmentShader = `
   varying mediump float vOpacity;
   uniform sampler2D uSampler;
   uniform mediump vec2 uTextureDimensions;
+  uniform mediump vec4 uColorEffect;
+
+  float RGBToL(vec3 color) {
+    lowp float fmin = min(min(color.r, color.g), color.b);    //Min. value of RGB
+    lowp float fmax = max(max(color.r, color.g), color.b);    //Max. value of RGB
+    
+    return (fmax + fmin) / 2.0; // Luminance
+  }
+
+  vec3 RGBToHSL(vec3 color) {
+    vec3 hsl; 
+
+    float fmin = min(min(color.r, color.g), color.b);
+    float fmax = max(max(color.r, color.g), color.b); 
+    float delta = fmax - fmin;
+
+    hsl.z = (fmax + fmin) / 2.0; // Luminance
+
+    if (delta == 0.0)	{
+      hsl.x = 0.0;	// Hue
+      hsl.y = 0.0;	// Saturation
+    } else                                  {
+      if (hsl.z < 0.5)
+        hsl.y = delta / (fmax + fmin); // Saturation
+      else
+        hsl.y = delta / (2.0 - fmax - fmin); // Saturation
+
+    float deltaR = (((fmax - color.r) / 6.0) + (delta / 2.0)) / delta;
+    float deltaG = (((fmax - color.g) / 6.0) + (delta / 2.0)) / delta;
+    float deltaB = (((fmax - color.b) / 6.0) + (delta / 2.0)) / delta;
+
+    if (color.r == fmax )
+      hsl.x = deltaB - deltaG; // Hue
+    else if (color.g == fmax)
+      hsl.x = (1.0 / 3.0) + deltaR - deltaB; // Hue
+    else if (color.b == fmax)
+      hsl.x = (2.0 / 3.0) + deltaG - deltaR; // Hue
+
+    if (hsl.x < 0.0)
+      hsl.x += 1.0; // Hue
+      else if (hsl.x > 1.0)
+      hsl.x -= 1.0; // Hue
+    }
+
+    return hsl;
+  }
+
+  float HueToRGB(lowp float f1, lowp float f2, lowp float hue) {
+    if (hue < 0.0)
+        hue += 1.0;
+    else if (hue > 1.0)
+        hue -= 1.0;
+    lowp float res;
+    if ((6.0 * hue) < 1.0)
+        res = f1 + (f2 - f1) * 6.0 * hue;
+    else if ((2.0 * hue) < 1.0)
+        res = f2;
+    else if ((3.0 * hue) < 2.0)
+        res = f1 + (f2 - f1) * ((2.0 / 3.0) - hue) * 6.0;
+    else
+        res = f1;
+    return res;
+  }
+
+  vec3 HSLToRGB(vec3 hsl) {
+    lowp vec3 rgb;
+
+    if (hsl.y == 0.0)
+        rgb = vec3(hsl.z); // Luminance
+    else {
+        lowp float f2;
+        if (hsl.z < 0.5)
+            f2 = hsl.z * (1.0 + hsl.y);
+        else
+            f2 = (hsl.z + hsl.y) - (hsl.y * hsl.z);
+        float f1 = 2.0 * hsl.z - f2;
+        
+        rgb.r = HueToRGB(f1, f2, hsl.x + (1.0/3.0));
+        rgb.g = HueToRGB(f1, f2, hsl.x);
+        rgb.b = HueToRGB(f1, f2, hsl.x - (1.0/3.0));
+    }
+
+    return rgb;
+  }
 
   void main(void) {
+    float lightness = uColorEffect.r;
+    float saturation = uColorEffect.g;
+    float targetHue = uColorEffect.b;
+    float targetSaturation = uColorEffect.a;
+
     highp vec2 coord = vTextureCoord.xy / uTextureDimensions;
     mediump vec4 texelColor = texture2D(uSampler, coord);
 
-    gl_FragColor = vec4(texelColor.rgb * texelColor.a * vOpacity, texelColor.a * vOpacity);
+    vec3 color = texelColor.rgb;
+
+    vec3 hsl = RGBToHSL(color);
+    color = mix(
+      HSLToRGB(vec3(hsl.x, hsl.y * saturation, hsl.z)),
+      HSLToRGB(vec3(targetHue, targetSaturation, hsl.z)), 
+      1.0 - saturation
+    ) * lightness;
+
+    float contrast = 1.0;
+    color = ((color.rgb - 0.5) * max(contrast, 0.0)) + 0.5;
+
+    gl_FragColor = vec4(color * texelColor.a * vOpacity, texelColor.a * vOpacity);
   }
 `;
 
@@ -83,6 +184,7 @@ export const showComposition = (): {
     start: number;
     amount: number;
     mutator: number;
+    lightness: number;
     x: number;
     y: number;
     z: number;
@@ -129,6 +231,7 @@ export const showComposition = (): {
         x: itemOffset[0],
         y: itemOffset[1],
         z: -0.5 + itemOffset[2] * 0.001,
+        lightness: 1.0,
       });
       const offset = vertices.length / stride;
       shape.points.forEach(([x, y]) => {
@@ -145,7 +248,7 @@ export const showComposition = (): {
       vectorSettings,
       mutatorMapping,
       shapeMutatorMapping,
-    } = createMutationList(shapes);
+    } = createShapeMutationList(shapes);
 
     elements.forEach((element) => {
       element.mutator = shapeMutatorMapping[element.name];
@@ -238,6 +341,8 @@ export const showComposition = (): {
       populateShapes();
       const translate = gl.getUniformLocation(shaderProgram, "translate");
       const mutation = gl.getUniformLocation(shaderProgram, "mutation");
+      const uColorEffect = gl.getUniformLocation(program, "uColorEffect");
+
       const uBasePosition = gl.getUniformLocation(
         shaderProgram,
         "basePosition"
@@ -327,6 +432,10 @@ export const showComposition = (): {
             }
             gl.uniform3f(translate, element.x, element.y, element.z);
             gl.uniform1f(mutation, element.mutator);
+
+            // lightness, saturation, targetHue, targetSaturation,
+            gl.uniform4f(uColorEffect, element.lightness, 1.0, 1.0, 1.0);
+
             gl.drawElements(
               gl.TRIANGLES,
               element.amount,

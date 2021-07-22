@@ -88,7 +88,11 @@ export const webGLScene = async (
     getSize: () => [element.width, element.height],
   };
 
-  gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+  } else {
+    gl.clearColor(0.67, 0.67, 0.67, 1.0);
+  }
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);

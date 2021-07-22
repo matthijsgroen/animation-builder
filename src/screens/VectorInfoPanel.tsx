@@ -4,13 +4,27 @@ import { Control } from "src/components/Control";
 import Menu from "src/components/Menu";
 import NumberInputControl from "src/components/NumberInputControl";
 import SelectControl from "src/components/SelectControl";
+import { iconForType } from "src/components/ShapeList";
 import SliderControl from "src/components/SliderControl";
 import ToggleInputControl from "src/components/ToggleControl";
-import Vect2InputControl from "src/components/Vec2InputControl";
-import { omitKeys, updateVectorData } from "src/lib/definitionHelpers";
-import { ImageDefinition, MutationVector, Vec2 } from "src/lib/types";
+import Vec2InputControl from "src/components/Vec2InputControl";
+import {
+  defaultNamesForMutations,
+  omitKeys,
+  updateVectorData,
+} from "src/lib/definitionHelpers";
+import {
+  ImageDefinition,
+  MutationVector,
+  MutationVectorTypes,
+  Vec2,
+} from "src/lib/types";
 import { defaultValueForVector } from "src/lib/vertices";
-import { isControlDefinition, visit } from "src/lib/visit";
+import {
+  isControlDefinition,
+  isShapeMutationVector,
+  visit,
+} from "src/lib/visit";
 
 interface VectorInfoPanelProps {
   vectorSelected: MutationVector;
@@ -23,12 +37,10 @@ interface VectorInfoPanelProps {
   onRename(newName: string): void;
 }
 
-type VectorTypes = MutationVector["type"];
-
 const createVector = (
   name: string,
   origin: Vec2,
-  newType: VectorTypes
+  newType: MutationVectorTypes
 ): MutationVector => {
   switch (newType) {
     case "deform":
@@ -41,17 +53,12 @@ const createVector = (
       return { type: "translate", origin, name, radius: -1 };
     case "opacity":
       return { type: "opacity", origin, name };
+    case "lightness":
+      return { type: "lightness", origin, name };
+    case "colorize":
+      return { type: "colorize", origin, name };
   }
 };
-
-const iconForType = (type: VectorTypes): string =>
-  (({
-    deform: "🟠",
-    rotate: "🔴",
-    stretch: "🟣",
-    translate: "🟢",
-    opacity: "⚪️",
-  } as Record<VectorTypes, string>)[type]);
 
 export const setMutationUnderControl = (
   state: ImageDefinition,
@@ -99,6 +106,27 @@ const releaseMutationFromControl = (
     return undefined;
   });
 
+const makeOption = (
+  id: MutationVectorTypes
+): { name: string; id: string; value: MutationVectorTypes } => ({
+  name: defaultNamesForMutations[id],
+  id,
+  value: id,
+});
+
+const vectorSelectionOptions: {
+  name: string;
+  id: string;
+  value: MutationVectorTypes;
+}[] = [
+  makeOption("deform"),
+  makeOption("translate"),
+  makeOption("rotate"),
+  makeOption("stretch"),
+  makeOption("opacity"),
+  makeOption("lightness"),
+];
+
 const VectorInfoPanel: React.VFC<VectorInfoPanelProps> = ({
   vectorSelected,
   updateImageDefinition,
@@ -132,33 +160,7 @@ const VectorInfoPanel: React.VFC<VectorInfoPanelProps> = ({
                 key={"type"}
                 title={"Type"}
                 value={vectorSelected.type}
-                options={[
-                  {
-                    name: "Deformation",
-                    id: "deform",
-                    value: "deform" as VectorTypes,
-                  },
-                  {
-                    name: "Translation",
-                    id: "translate",
-                    value: "translate" as VectorTypes,
-                  },
-                  {
-                    name: "Rotation",
-                    id: "rotate",
-                    value: "rotate" as VectorTypes,
-                  },
-                  {
-                    name: "Stretch",
-                    id: "stretch",
-                    value: "stretch" as VectorTypes,
-                  },
-                  {
-                    name: "Opacity",
-                    id: "opacity",
-                    value: "opacity" as VectorTypes,
-                  },
-                ]}
+                options={vectorSelectionOptions}
                 onChange={(newValue) => {
                   updateVectorValue(defaultValueForVector(newValue.value));
                   updateImageDefinition((state) =>
@@ -168,7 +170,9 @@ const VectorInfoPanel: React.VFC<VectorInfoPanelProps> = ({
                       (vector) =>
                         createVector(
                           vector.name,
-                          vector.origin,
+                          isShapeMutationVector(vector)
+                            ? vector.origin
+                            : [1, 1],
                           newValue.value
                         ),
                       onRename
@@ -176,7 +180,11 @@ const VectorInfoPanel: React.VFC<VectorInfoPanelProps> = ({
                   );
                 }}
               />,
-              <Vect2InputControl
+            ]
+          : []),
+        ...(isShapeMutationVector(vectorSelected) && !activeControl
+          ? [
+              <Vec2InputControl
                 key={"origin"}
                 title={"origin"}
                 value={vectorSelected.origin}
@@ -220,7 +228,7 @@ const VectorInfoPanel: React.VFC<VectorInfoPanelProps> = ({
           : []),
         ...(vectorSelected.type === "deform"
           ? [
-              <Vect2InputControl
+              <Vec2InputControl
                 key={"value"}
                 title={"value"}
                 value={activeValue}
@@ -232,7 +240,7 @@ const VectorInfoPanel: React.VFC<VectorInfoPanelProps> = ({
           : []),
         ...(vectorSelected.type === "stretch"
           ? [
-              <Vect2InputControl
+              <Vec2InputControl
                 key={"value"}
                 title={"value"}
                 value={activeValue}
@@ -289,7 +297,7 @@ const VectorInfoPanel: React.VFC<VectorInfoPanelProps> = ({
           : []),
         ...(vectorSelected.type === "translate"
           ? [
-              <Vect2InputControl
+              <Vec2InputControl
                 key={"value"}
                 title={"value"}
                 value={activeValue}
@@ -321,10 +329,26 @@ const VectorInfoPanel: React.VFC<VectorInfoPanelProps> = ({
                 key={"value"}
                 title={"value"}
                 value={activeValue[0]}
-                showValue={true}
+                showValue={(value) => `${Math.round(value * 100)} %`}
                 min={0}
                 max={1}
-                step={0.05}
+                step={0.01}
+                onChange={(newValue) => {
+                  updateVectorValue([newValue, 0]);
+                }}
+              />,
+            ]
+          : []),
+        ...(vectorSelected.type === "lightness"
+          ? [
+              <SliderControl
+                key={"value"}
+                title={"value"}
+                value={activeValue[0]}
+                showValue={(value) => `${Math.round(value * 100)} %`}
+                min={0}
+                max={1}
+                step={0.01}
                 onChange={(newValue) => {
                   updateVectorValue([newValue, 0]);
                 }}
